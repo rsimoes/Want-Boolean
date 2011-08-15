@@ -16,6 +16,7 @@ use Sub::Exporter -setup => {
 
 sub wantbool  {
 	my ( $found_op, $start_op );
+
 	my $walk_callback = sub {
 		my $op = shift;
 		if ( _check_wanted($op) ) {
@@ -28,7 +29,8 @@ sub wantbool  {
 			}
 		}
 	};
-		# Set starting op and look for opportunities to return early:
+
+	# Set starting op and look for opportunities to return early:
 	my $return_op = return_op(1);
 	my $parent_op = parent_op(1);
 	if ( $return_op->flagspv eq 'WANT_VOID' ) {
@@ -38,7 +40,9 @@ sub wantbool  {
 		$start_op = $return_op;
 		$found_op = 'not' if $start_op->name eq 'not';
 	}
-		walkoptree_simple($start_op, $walk_callback) if !$found_op;
+
+	# Find and return the LOGOP, or return undef:
+	walkoptree_simple($start_op, $walk_callback) if !$found_op;
 	$found_op = uc $found_op if $found_op;
 	return $found_op;
 }
@@ -51,4 +55,4 @@ sub _check_wanted {
 
 1;
 
-# ABSTRACT: Determine a sub's calling operator when called in a boolean context
+# ABSTRACT: Determine a sub's calling boolean operator
