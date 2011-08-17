@@ -1,4 +1,4 @@
-/Want-Boolean*
+Want-Boolean*
 .build
 *.swp
 *.bak
@@ -15,3 +15,4 @@ nytprof*
 .DS_Store
 MYMETA.*
 *.o
+*\#*

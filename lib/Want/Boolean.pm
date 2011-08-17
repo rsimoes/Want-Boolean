@@ -3,7 +3,7 @@ package Want::Boolean;
 use 5.010;
 use strict;
 use warnings;
-use utf8::all;
+use utf8;
 use B::Flags;
 use B::Utils 'walkoptree_simple';
 use B::Utils::OP qw/parent_op return_op/;
@@ -21,10 +21,10 @@ sub wantbool  {
 		my $op = shift;
 		if ( _check_wanted($op) ) {
 			$found_op = $op->name;
-			if (
-					$found_op ne 'not'
-					&& any { $_->oldname eq 'not' } $op->descendants
-			) {
+			say $op->type;
+			# Look for an optimized-away NOT operator. $found_op will have
+			# a &first method if it is a binary LOGOP (i.e., not NOT):
+			if ( $found_op ne 'not' && $op->first->oldname eq 'not' ) {
 				$found_op = 'not';
 			}
 		}
@@ -32,9 +32,8 @@ sub wantbool  {
 
 	# Set starting op and look for opportunities to return early:
 	my $return_op = return_op(1);
-	my $parent_op = parent_op(1);
 	if ( $return_op->flagspv eq 'WANT_VOID' ) {
-		$start_op = $parent_op->next->next;
+		$start_op = parent_op(1)->next->next;
 		$found_op = $start_op->name if _check_wanted($start_op);
 	} else {
 		$start_op = $return_op;
@@ -55,4 +54,4 @@ sub _check_wanted {
 
 1;
 
-# ABSTRACT: Determine a sub's calling boolean operator
+# ABSTRACT: Determine a sub or eval block's calling boolean operator
