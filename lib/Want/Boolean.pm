@@ -1,55 +1,77 @@
 package Want::Boolean;
 
-use 5.010;
+use v5.10;
 use strict;
 use warnings;
-use utf8;
-use B::Flags;
-use B::Utils 'walkoptree_simple';
-use B::Utils::OP qw/parent_op return_op/;
-use List::AllUtils 'any';
+use utf8::all;
+use overload;
+use B::Utils::OP 'return_op';
+use Data::Dump 'dump';
+use Devel::Caller;
 use Sub::Exporter -setup => {
-	exports => ['wantbool']
+	exports => ['wantbool'],
 };
 
 # VERSION
 
+# Op types:
+use constant {
+	NULL      => 0,
+	NOT       => 96,
+	AND       => 164,
+	OR        => 165,
+	XOR       => 166,
+	COND_EXPR => 168,
+	SCOPE     => 186,
+	LINESEQ   => 180,
+	ENTERLOOP => 189,
+	ENTERWHEN => 201
+};
+use constant {
+	BOOLS     => [ NOT, AND, OR, XOR, COND_EXPR, ENTERWHEN ]
+};
+
+#sub B::OP::print_it {
+#	my ( $self ) = @ARG;
+#	print "    " . B::peekop($self);
+#}
+
 sub wantbool  {
-	my ( $found_op, $start_op );
 
-	my $walk_callback = sub {
-		my $op = shift;
-		if ( _check_wanted($op) ) {
-			$found_op = $op->name;
-			say $op->type;
-			# Look for an optimized-away NOT operator. $found_op will have
-			# a &first method if it is a binary LOGOP (i.e., not NOT):
-			if ( $found_op ne 'not' && $op->first->oldname eq 'not' ) {
-				$found_op = 'not';
-			}
-		}
-	};
-
-	# Set starting op and look for opportunities to return early:
+	# Look for cases to return early:
+	return undef if not defined ((caller 1)[5]);
 	my $return_op = return_op(1);
-	if ( $return_op->flagspv eq 'WANT_VOID' ) {
-		$start_op = parent_op(1)->next->next;
-		$found_op = $start_op->name if _check_wanted($start_op);
-	} else {
-		$start_op = $return_op;
-		$found_op = 'not' if $start_op->name eq 'not';
+	if ( not $$return_op ) { # Overloaded?
+		my $self = Devel::Caller::_context_op( PadWalker::_upcontext(0) );
+		$return_op = $self->parent;
+	}
+	my $op_type = $return_op->type;
+	$op_type ~~ BOOLS or return '';
+
+	# Look for "unobvious" boolean ops:
+	my $child1 = $return_op->first;
+	if ( $op_type !~~ [ NOT, XOR ] && $child1->targ == NOT ) {
+		$op_type = NOT;       # Optimized away NOT operator
+	} elsif ( $op_type == AND ) {
+		my $child2 = $child1->sibling;
+		my $c2_type = $child2->type;
+		if ( $c2_type == SCOPE ) {
+			$op_type = COND_EXPR; # Simple conditional handled by AND
+		} elsif ( $c2_type == LINESEQ ) {
+			$op_type = ENTERLOOP; # While or for loop
+		}
 	}
 
-	# Find and return the LOGOP, or return undef:
-	walkoptree_simple($start_op, $walk_callback) if !$found_op;
-	$found_op = uc $found_op if $found_op;
-	return $found_op;
-}
-
-sub _check_wanted {
-	my $op = shift;
-	state $wanted_ops = [qw/and or xor not/];
-	return any { $op->name eq $_ } @$wanted_ops;
+	state $op_names = {
+		NOT()       => 'NOT',
+		AND()       => 'AND',
+		OR()        => 'OR',
+		XOR()       => 'XOR',
+		COND_EXPR() => 'COND',
+		ENTERWHEN() => 'WHEN',
+		ENTERLOOP() => 'LOOP'
+	};
+	return $op_names->{$op_type};
 }
 
 1;
