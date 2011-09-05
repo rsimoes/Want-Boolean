@@ -4,7 +4,7 @@ use v5.10;
 use strict;
 use warnings;
 use utf8::all;
-use overload;
+
 use B::Utils::OP 'return_op';
 use Data::Dump 'dump';
 use Devel::Caller;
